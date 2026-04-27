@@ -4,41 +4,27 @@ begin
 
 section "Weakest precondition calculus"
 
-named_theorems wprule
-named_theorems wperule
+named_theorems wprules
+named_theorems wperules
 named_theorems wpdrules
 named_theorems wpsimps
 
 declare(in Contract) inv_state_def[wpsimps]
+declare icall_def[wpsimps]
+declare ecall_def[wpsimps]
 
-method wp declares wprule = (rule wprule | drule wpdrules | erule wperule | simp add: wpsimps)
-method vcg declares wprule = wp+
+method wp declares wprules wpdrules wperules wpsimps = (rule wprules | drule wpdrules | erule wperules | simp add: wpsimps)
+method vcg declares wprules wpdrules wperules wpsimps = wp+
 
 subsection "Simplification rules"
-
-lemma sint[wpsimps]:
-  "sint = Sint 0"
-  unfolding sint_def ..
-
-lemma address[wpsimps]:
-  "address = Address null"
-  unfolding address_def ..
-
-lemma bytes[wpsimps]:
-  "bytes = Bytes (STR ''0000000000000000000000000000000000000000000000000000000000000000'')"
-  unfolding bytes_def ..
-
-lemma bool[wpsimps]:
-  "bool = Bool False"
-  unfolding bool_def ..
 
 lemma mapping[wpsimps]:
   "mapping x y = x"
   unfolding mapping_def ..
 
 lemma Value_vt[wpsimps]:
-  assumes "sdata.Value x = v"
-    shows "sdata.vt v = x"
+  assumes "storage_data.Value x = v"
+    shows "storage_data.vt v = x"
   using assms by auto
 
 subsubsection "Kdata"
@@ -48,44 +34,62 @@ lemma kdbool_simp[wpsimps]:
   unfolding kdbool_def by simp
 
 lemma kdSint_simp[wpsimps]:
-  "kdSint x = Value (Sint x)"
+  "kdSint x = Value (Uint x)"
   unfolding kdSint_def by simp
+
+lemma kdBytes_simp[wpsimps]:
+  "kdBytes xs = Value (Bytes xs)"
+  unfolding kdBytes_def by simp
 
 lemma kdAddress_simp[wpsimps]:
   "kdAddress x = Value (Address x)"
   unfolding kdAddress_def by simp
 
 lemma kdminus[wpsimps]:
-  "kdminus (rvalue.Value (Sint l)) (rvalue.Value (Sint r)) = Some (rvalue.Value (Sint (l - r)))"
+  "kdminus (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some (rvalue.Value (Uint (l - r)))"
   unfolding kdminus_def vtminus_def by simp
 
 lemma kdminus_safe[wpsimps]:
   assumes "r \<le> l"
-  shows "kdminus_safe (rvalue.Value (Sint l)) (rvalue.Value (Sint r)) = Some (rvalue.Value (Sint (l - r)))"
+  shows "kdminus_safe (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some (rvalue.Value (Uint (l - r)))"
   unfolding kdminus_safe_def using assms by (simp add: vtminus_safe.simps)
 
 lemma kdminus_safe_dest[wpdrules]:
-  assumes "kdminus_safe (rvalue.Value (Sint l)) (rvalue.Value (Sint r)) = Some ya"
-  shows "r \<le> l \<and> ya = rvalue.Value (Sint (l - r))"
+  assumes "kdminus_safe (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some ya"
+  shows "r \<le> l \<and> ya = rvalue.Value (Uint (l - r))"
   using assms unfolding kdminus_safe_def by (simp split:if_split_asm add:vtminus_safe.simps)
 
 lemma kdminus_storage[wpsimps]:
-  "kdminus (rvalue.Storage x y) z = None"
+  "kdminus (rvalue.Storage x) z = None"
   unfolding kdminus_def vtminus_def by simp
 
 lemma kdplus[wpsimps]:
-  "kdplus (rvalue.Value (Sint l)) (rvalue.Value (Sint r)) = Some (rvalue.Value (Sint (l + r)))"
+  "kdplus (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some (rvalue.Value (Uint (l + r)))"
   unfolding kdplus_def vtplus_def by simp
 
 lemma kdplus_safe[wpsimps]:
   assumes "unat l + unat r < 2^256"
-  shows "kdplus_safe (rvalue.Value (Sint l)) (rvalue.Value (Sint r)) = Some (rvalue.Value (Sint (l + r)))"
+  shows "kdplus_safe (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some (rvalue.Value (Uint (l + r)))"
   unfolding kdplus_safe_def using assms by (simp add:vtplus_safe.simps)
 
 lemma kdplus_safe_dest[wpdrules]:
-  assumes "kdplus_safe (rvalue.Value (Sint l)) (rvalue.Value (Sint r)) = Some ya"
-  shows "unat l + unat r < 2^256 \<and> ya = rvalue.Value (Sint (l + r))"
+  assumes "kdplus_safe (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some ya"
+  shows "unat l + unat r < 2^256 \<and> ya = rvalue.Value (Uint (l + r))"
   using assms unfolding kdplus_safe_def by (simp split:if_split_asm add:vtplus_safe.simps)
+
+lemma kdmult[wpsimps]:
+  "kdmult (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some (rvalue.Value (Uint (l * r)))"
+  unfolding kdmult_def vtmult_def by simp
+
+lemma kdmult_safe[wpsimps]:
+  assumes "unat l * unat r < 2^256"
+  shows "kdmult_safe (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some (rvalue.Value (Uint (l * r)))"
+  unfolding kdmult_safe_def using assms by (simp add:vtmult_safe.simps)
+
+lemma kdmult_safe_dest[wpdrules]:
+  assumes "kdmult_safe (rvalue.Value (Uint l)) (rvalue.Value (Uint r)) = Some ya"
+  shows "unat l * unat r < 2^256 \<and> ya = rvalue.Value (Uint (l * r))"
+  using assms unfolding kdmult_safe_def by (simp split:if_split_asm add:vtmult_safe.simps)
 
 subsubsection "Updates"
 
@@ -101,6 +105,10 @@ lemma (in Contract) stack_storage_update[wpsimps]:
 lemma stack_balances_update[wpsimps]:
   "Stack (balances_update i x s) = Stack s"
   unfolding balances_update_def by simp
+
+lemma stack_calldata_update[wpsimps]:
+  "Stack (calldata_update i x s) = Stack s"
+  unfolding calldata_update_def by simp
 
 lemma stack_update_eq[wpsimps]:
   "Stack (stack_update i x s) $$ i = Some x"
@@ -126,10 +134,27 @@ lemma storage_stack_update[wpsimps]:
  "state.Storage (stack_update i v s) = state.Storage s"
   unfolding stack_update_def by simp
 
+lemma storage_calldata_update[wpsimps]:
+ "state.Storage (calldata_update i v s) = state.Storage s"
+  unfolding calldata_update_def by simp
+
 lemma storage_balances_update[wpsimps]:
  "state.Storage (balances_update i v s) = state.Storage s"
   unfolding balances_update_def by simp
 
+lemma calldata_calldata_update[wpsimps]:
+ "state.Calldata (calldata_update i v s) $$ i = Some v"
+  unfolding calldata_update_def by simp
+
+lemma calldata_calldata_update_neq[wpsimps]:
+  assumes "i \<noteq> i'"
+  shows "state.Calldata (calldata_update i v s) $$ i' = state.Calldata s $$ i'"
+  using assms unfolding calldata_update_def by simp
+
+lemma (in Contract) calldata_storage_update[wpsimps]:
+ "state.Calldata (storage_update i v s) $$ i'  = state.Calldata s $$ i'"
+ unfolding storage_update_def by simp
+ 
 lemma (in Contract) storage_update_diff[wpsimps]:
   assumes "i \<noteq> i'"
   shows "state.Storage (storage_update i x s) this i' = state.Storage s this i'"
@@ -147,6 +172,10 @@ lemma balances_stack_update[wpsimps]:
   "Balances (stack_update i' x s) = Balances s"
   unfolding stack_update_def by simp
 
+lemma balances_calldata_update[wpsimps]:
+  "Balances (calldata_update i' x s) = Balances s"
+  unfolding calldata_update_def by simp
+
 lemma balances_balances_update_diff[wpsimps]:
   assumes "i \<noteq> i'"
   shows "Balances (balances_update i x s) i' = Balances s i'"
@@ -154,6 +183,10 @@ lemma balances_balances_update_diff[wpsimps]:
 
 lemma balances_balances_update_same[wpsimps]:
   "Balances (balances_update i x s) i = x"
+  unfolding balances_update_def by simp
+
+lemma balances_update_balances[wpsimps]:
+  "balances_update i (Balances s i) s = s"
   unfolding balances_update_def by simp
 
 subsection "Destruction rules"
@@ -199,18 +232,23 @@ lemma wp_simp3:
     shows "wp f P E s"
   unfolding wp_def by (cases "execute f s" rule:result_cases) (simp_all add: assms)
 
-lemma wp_if[wprule]:
+lemma wp_if[wprules]:
   assumes "b \<Longrightarrow> wp a P E s"
       and "\<not> b \<Longrightarrow> wp c P E s"
   shows "wp (if b then a else c) P E s"
   using assms by simp
 
-lemma wpreturn[wprule]: 
+lemma wpreturn[wprules]: 
   assumes "P x s"
   shows "wp (return x) P E s"
   unfolding wp_def using assms by (simp add: execute_simps)
 
-lemma wpbind[wprule]:
+lemma wpget[wprules]: 
+  assumes "P s s"
+  shows "wp get P E s"
+  unfolding wp_def using assms by (simp add: execute_simps)
+
+lemma wpbind[wprules]:
   assumes "wp f (\<lambda>a. (wp (g a) P E)) E s"
   shows "wp (f \<bind> g) P E s"
 proof (cases "execute f s")
@@ -243,7 +281,7 @@ next
   then show ?thesis using wp_def by fastforce
 qed
 
-lemma wpthrow[wprule]:
+lemma wpthrow[wprules]:
   assumes "E x s"
   shows "wp (throw x) P E s"
   unfolding wp_def using assms by (simp add: execute_simps)
@@ -251,6 +289,20 @@ lemma wpthrow[wprule]:
 lemma wp_lfold:
   assumes "P [] s"
   assumes "\<And>a list. xs = a#list \<Longrightarrow> wp (a \<bind> (\<lambda>l. option Err (\<lambda>_. the_value l) \<bind> (\<lambda>l'. lfold list \<bind> (\<lambda>ls. return (l' # ls))))) P E s"
+  shows "wp (lfold xs) P E s"
+  using assms  unfolding wp_def
+  apply (cases xs)
+  by (simp_all add: execute_simps)
+
+lemma wp_lfold1:
+  assumes "P [] s"
+  shows "wp (lfold []) P E s"
+  using assms  unfolding wp_def
+  by (simp_all add: execute_simps)
+
+lemma wp_lfold2:
+  assumes "xs = a#list"
+  assumes "wp (a \<bind> (\<lambda>l. option Err (\<lambda>_. the_value l) \<bind> (\<lambda>l'. lfold list \<bind> (\<lambda>ls. return (l' # ls))))) P E s"
   shows "wp (lfold xs) P E s"
   using assms  unfolding wp_def
   apply (cases xs)
@@ -271,22 +323,22 @@ next
   then show ?thesis using that by simp
 qed
 
-lemma wpmodify[wprule]:
+lemma wpmodify[wprules]:
   assumes "P () (f s)"
   shows "wp (modify f) P E s"
   unfolding wp_def using assms by (simp add: execute_simps)
 
-lemma wpnewStack[wprule]:
+lemma wpnewStack[wprules]:
   assumes "P Empty (s\<lparr>Stack := {$$}\<rparr>)"
   shows "wp newStack P E s"
   unfolding wp_def newStack_def using assms by (simp add: execute_simps)
 
-lemma wpnewMemory[wprule]:
+lemma wpnewMemory[wprules]:
   assumes "P Empty (s\<lparr>Memory := []\<rparr>)"
   shows "wp newMemory P E s"
   unfolding wp_def newMemory_def using assms by (simp add: execute_simps)
 
-lemma wpnewCalldata[wprule]:
+lemma wpnewCalldata[wprules]:
   assumes "P Empty (s\<lparr>Calldata := {$$}\<rparr>)"
   shows "wp newCalldata P E s"
   unfolding wp_def newCalldata_def using assms by (simp add: execute_simps)
@@ -294,81 +346,123 @@ lemma wpnewCalldata[wprule]:
 lemma wp_lift_op_monad:
   assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (op a rv)) \<bind> return)) P E) E s"
   shows "wp (lift_op_monad op lm rm) P E s"
-  unfolding lift_op_monad_def using assms by (rule wprule)
+  unfolding lift_op_monad_def using assms by (rule wprules)
 
-lemma wp_equals_monad[wprule]:
+lemma wp_equals_monad[wprules]:
   assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdequals a rv)) \<bind> return)) P E) E s"
   shows "wp (equals_monad lm rm) P E s"
   unfolding equals_monad_def using assms by (rule wp_lift_op_monad)
 
-lemma wp_less_monad[wprule]:
+lemma wp_less_monad[wprules]:
   assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdless a rv)) \<bind> return)) P E) E s"
   shows "wp (less_monad lm rm) P E s"
   unfolding less_monad_def using assms by (rule wp_lift_op_monad)
 
-lemma wp_mod_monad[wprule]:
+lemma wp_mod_monad[wprules]:
   assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdmod a rv)) \<bind> return)) P E) E s"
   shows "wp (mod_monad lm rm) P E s"
   unfolding mod_monad_def using assms by (rule wp_lift_op_monad)
 
-lemma wp_minus_monad[wprule]:
+lemma wp_minus_monad[wprules]:
   assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdminus a rv)) \<bind> return)) P E) E s"
   shows "wp (minus_monad lm rm) P E s"
   unfolding minus_monad_def using assms by (rule wp_lift_op_monad)
 
-lemma wp_minus_monad_safe[wprule]:
+lemma wp_minus_monad_safe[wprules]:
   assumes " wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdminus_safe a rv)) \<bind> return)) P E) E s"
   shows "wp (minus_monad_safe lm rm) P E s"
   unfolding minus_monad_safe_def using assms by (rule wp_lift_op_monad)
 
-lemma wp_plus_monad[wprule]:
+lemma wp_plus_monad[wprules]:
   assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdplus a rv)) \<bind> return)) P E) E s"
   shows "wp (plus_monad lm rm) P E s"
   unfolding plus_monad_def using assms by (rule wp_lift_op_monad)
 
-lemma wp_plus_monad_safe[wprule]:
+lemma wp_plus_monad_safe[wprules]:
   assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdplus_safe a rv)) \<bind> return)) P E) E s"
   shows "wp (plus_monad_safe lm rm) P E s"
   unfolding plus_monad_safe_def using assms by (rule wp_lift_op_monad)
 
-lemma wp_bool_monad[wprule]:
+lemma wp_mult_monad[wprules]:
+  assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdmult a rv)) \<bind> return)) P E) E s"
+  shows "wp (mult_monad lm rm) P E s"
+  unfolding mult_monad_def using assms by (rule wp_lift_op_monad)
+
+lemma wp_mult_monad_safe[wprules]:
+  assumes "wp lm (\<lambda>a. wp (rm \<bind> (\<lambda>rv. option Err (K (kdmult_safe a rv)) \<bind> return)) P E) E s"
+  shows "wp (mult_monad_safe lm rm) P E s"
+  unfolding mult_monad_safe_def using assms by (rule wp_lift_op_monad)
+
+lemma wp_bool_monad[wprules]:
   assumes "P (kdbool b) s"
   shows "wp (bool_monad b) P E s"
-  unfolding bool_monad_def using assms by (simp add: wprule)
+  unfolding bool_monad_def using assms by (simp add: wprules)
 
-lemma wp_true_monad[wprule]:
+lemma (in Solidity)  wp_bytes_monad[wprules]:
+  assumes "P ( kdBytes Bytes0) s"
+    shows "wp (bytes_monad2 Bytes0) P E s"
+  unfolding bytes_monad2_def  using assms by (simp add: wprules)
+
+lemma wp_true_monad[wprules]:
   assumes "P (kdbool True) s"
   shows "wp true_monad P E s"
   unfolding true_monad_def using assms by (rule wp_bool_monad)
 
-lemma wp_false_monad[wprule]:
+lemma wp_false_monad[wprules]:
   assumes "P (kdbool False) s"
   shows "wp false_monad P E s"
   unfolding false_monad_def using assms by (rule wp_bool_monad)
 
-lemma wp_sint_monad[wprule]:
+lemma wp_or_monad[wprules]:
+  assumes "wp l (\<lambda>a. wp (r \<bind> (\<lambda>rv. option Err (K (lift_value_binary vtor a rv)) \<bind> return)) P E) E s"
+  shows "wp (or_monad l r) P E s"
+  unfolding or_monad_def kdor_def using assms by (rule wp_lift_op_monad)
+
+lemma wp_sint_monad[wprules]:
   assumes "P (kdSint x) s"
   shows "wp (sint_monad x) P E s"
-  unfolding sint_monad_def using assms by (simp add: wprule)
+  unfolding sint_monad_def using assms by (simp add: wprules)
 
-lemma (in Method) wp_value_monad[wprule]:
+lemma wp_bytest_monad[wprules]:
+  assumes "P (kdBytes x) s" "n = length x" "n \<in> {1..<33}"
+  shows "wp (bytes_monad n x) P E s"
+  unfolding bytes_monad_def using assms by (simp add: wprules)
+
+lemma (in Method) wp_value_monad[wprules]:
   assumes "P (kdSint msg_value) s"
   shows "wp value_monad P E s"
   unfolding value_monad_def using assms by (rule wp_sint_monad)
 
-lemma wp_cond_monad[wprule]:
+lemma (in Method) wp_stamp_monad[wprules]:
+  assumes "P (kdSint timestamp) s"
+  shows "wp block_timestamp_monad P E s"
+  unfolding block_timestamp_monad_def using assms by (rule wp_sint_monad)
+             
+lemma (in Method) wp_nul[wprules]:
+  assumes "P (kdAddress null) s"
+  shows "wp \<langle>nul\<rangle> P E s"
+  unfolding null_monad_def wp_def address_monad_def  using assms by (simp add: execute_simps)
+
+lemma wp_cond_monad[wprules]:
   assumes "wp bm (\<lambda>a. wp (true_monad \<bind> (\<lambda>rv. option Err (K (kdequals a rv)) \<bind> return)) (\<lambda>a. wp (if a = kdbool True then mt else if a = kdbool False then fm else throw Err) P E) E) E s"
   shows "wp (cond_monad bm mt fm) P E s"
   unfolding cond_monad_def
-  apply (rule wprule)+ by (rule assms)
+  apply (rule wprules)+ by (rule assms)
 
-lemma wp_assert_monad[wprule]:
+lemma wp_and_monad[wprules]:
+  assumes "wp (m1 \<bind> (\<lambda>v. m2 \<bind> (\<lambda>va. option Err (K (lift_value_binary (lift_bool_binary (\<and>)) v va))))) P E s"
+  shows "wp ( m1 \<langle>\<and>\<rangle> m2 ) P E s"
+  unfolding and_monad_def lift_op_monad_def kdand_def vtand_def
+  using assms
+  by (simp add:wpsimps)
+
+lemma wp_assert_monad[wprules]:
   assumes "wp (Solidity.cond_monad bm (return Empty) (throw Err)) P E s"
   shows "wp (assert_monad bm) P E s"
   unfolding assert_monad_def
   using assms by simp
 
-lemma wpoption[wprule]:
+lemma wpoption[wprules]:
   assumes "\<And>y. f s = Some y \<Longrightarrow> P y s"
       and "f s = None \<Longrightarrow> E x s"
     shows "wp (option x f) P E s"
@@ -383,38 +477,38 @@ qed
 lemma wp_lift_unary_monad:
   assumes "wp lm (\<lambda>a. wp (option Err (K (op a)) \<bind> return) P E) E s"
   shows "wp (lift_unary_monad op lm) P E s"
-  unfolding lift_unary_monad_def apply (rule wprule)+ by (rule assms)
+  unfolding lift_unary_monad_def apply (rule wprules)+ by (rule assms)
 
-lemma wp_not_monad[wprule]:
+lemma wp_not_monad[wprules]:
   assumes "wp lm (\<lambda>a. wp (option Err (K (kdnot a)) \<bind> return) P E) E s"
   shows "wp (not_monad lm) P E s"
   unfolding not_monad_def using assms by (rule wp_lift_unary_monad)
 
-lemma wp_address_monad[wprule]:
+lemma wp_address_monad[wprules]:
   assumes "P (kdAddress a) s"
   shows "wp (address_monad a) P E s"
-  unfolding address_monad_def by (simp add: wprule assms)
+  unfolding address_monad_def by (simp add: wprules assms)
 
-lemma(in Method) wp_sender_monad[wprule]:
+lemma(in Method) wp_sender_monad[wprules]:
   assumes "P (kdAddress msg_sender) s"
   shows "wp sender_monad P E s"
   unfolding sender_monad_def using assms by (rule wp_address_monad)
 
-lemma wp_require_monad[wprule]:
+lemma wp_require_monad[wprules]:
   assumes "wp (x \<bind> (\<lambda>v. if v = rvalue.Value (Bool True) then return Empty else throw Err)) P E s"
   shows "wp (require_monad x) P E s"
   unfolding require_monad_def using assms by (simp add:wpsimps)
 
-lemma (in Contract) wp_storeLookup[wprule]:
+lemma (in Contract) wp_storeLookup[wprules]:
   assumes "wp (lfold es)
      (\<lambda>a. wp (option Err (\<lambda>s. slookup a (state.Storage s this i)) \<bind>
-              (\<lambda>sd. if sdata.is_Value sd then return (rvalue.Value (sdata.vt sd)) else return (rvalue.Storage i a)))
+              (\<lambda>sd. if storage_data.is_Value sd then return (rvalue.Value (storage_data.vt sd)) else return (rvalue.Storage (Some \<lparr>Location=i, Offset= a\<rparr>))))
            P E)
      E s"
     shows "wp (storeLookup i es) P E s"
-  unfolding storeLookup_def by (rule wprule | auto simp add: assms split:if_split)+
+  unfolding storeLookup_def by (rule wprules | auto simp add: assms split:if_split)+
 
-lemma wpassert[wprule]:
+lemma wpassert[wprules]:
   assumes "t s \<Longrightarrow> wp (return ()) P E s"
       and "\<not> t s \<Longrightarrow> wp (throw x) P E s"
     shows "wp (assert x t) P E s"
@@ -422,13 +516,13 @@ lemma wpassert[wprule]:
   apply (metis assms(1) assms(2) execute_assert(1) execute_assert(2) wp_simp1)
   by (metis assms(1) assms(2) execute_assert(1) execute_assert(2) wp_simp2)
 
-lemma wp_bool[wprule]:
+lemma wp_bool[wprules]:
   "wp (bool_monad b) (\<lambda>a _. a = kdbool b) (K x) s"
   unfolding bool_monad_def
-  by (simp add: wprule)
+  by (simp add: wprules)
 
 
-lemma wpskip[wprule]: 
+lemma wpskip[wprules]: 
   assumes "P Empty s"
   shows "wp skip_monad P E s"
   unfolding skip_monad_def using assms by vcg
@@ -546,145 +640,178 @@ next
   then show ?thesis unfolding wp_def by simp
 qed
 
-lemma wp_applyf[wprule]:
+lemma wp_applyf[wprules]:
   assumes "P (f s) s"
   shows "wp (applyf f) P E s"
   unfolding applyf_def get_def return_def wp_def using assms by (auto simp add:wpsimps execute_simps)
 
-lemma wp_case_option[wprule]:
+lemma wp_case_option[wprules]:
   assumes "x = None \<Longrightarrow> wp a P E s"
       and "\<And>a. x = Some a \<Longrightarrow> wp (b a) P E s"
   shows "wp (case x of None \<Rightarrow> a | Some x \<Rightarrow> b x) P E s"
   unfolding wp_def apply (cases x, auto) apply (fold wp_def) by (simp add:assms)+
 
-lemma wp_case_kdata[wprule]:
-  assumes "\<And>x11 x12. a = kdata.Storage x11 x12 \<Longrightarrow> wp (S x11 x12) P E s"
+lemma wp_case_kdata[wprules]:
+  assumes "\<And>x1. a = kdata.Storage x1 \<Longrightarrow> wp (S x1) P E s"
       and "\<And>x2. a = kdata.Memory x2 \<Longrightarrow> wp (M x2) P E s"
-      and "\<And>x31 x32. a = kdata.Calldata x31 x32 \<Longrightarrow> wp (C x31 x32) P E s"
+      and "\<And>x3. a = kdata.Calldata x3 \<Longrightarrow> wp (C x3) P E s"
       and "\<And>x4. a = kdata.Value x4 \<Longrightarrow> wp (V x4) P E s"
-  shows "wp (case a of kdata.Storage p xs \<Rightarrow> S p xs | kdata.Memory p \<Rightarrow> M p | kdata.Calldata x xa \<Rightarrow> C x xa | kdata.Value x \<Rightarrow> V x) P E s"
+  shows "wp (case a of kdata.Storage p \<Rightarrow> S p | kdata.Memory l \<Rightarrow> M l | kdata.Calldata p \<Rightarrow> C p | kdata.Value x \<Rightarrow> V x) P E s"
   unfolding wp_def apply (cases a, auto) apply (fold wp_def) by (simp add:assms)+
 
-lemma wp_init[wprule]:
+lemma wp_init[wprules]:
   assumes "P Empty (stack_update i (kdata.Value v) s)"
-  shows "wp (init i v) P E s"
-  unfolding init_def wp_def using assms by(auto simp add:wpsimps execute_simps)
+  shows "wp (init v i) P E s"
+  unfolding init_def wp_def kinit_def using assms by(auto simp add:wpsimps execute_simps)
 
-lemma wp_minit[wprule]:
-  assumes "\<And>l m. State.minit c (state.Memory s) = (l, m) \<Longrightarrow> P Empty (s\<lparr>Stack := Stack s(i $$:= kdata.Memory l), Memory := m\<rparr>)"
-    shows "wp (minit i c) P E s"
-  unfolding minit_def wp_def using assms by (simp add:wpsimps execute_simps split: prod.split)
+lemma wp_decl[wprules]:
+  assumes "wp (init (Solidity.default t) i) P E s"
+  shows "wp (decl t i) P E s"
+  unfolding decl_def using assms by simp
 
-lemma wp_sinit[wprule]:
-  assumes "P Empty (stack_update i (kdata.Storage i' v) s)"
-  shows "wp (sinit i i' v) P E s"
+lemma wp_write[wprules]:
+  assumes "\<And>x1 x2.
+       Memory.write c (state.Memory s) = (x1, x2) \<Longrightarrow>
+       P Empty (s\<lparr>Stack := Stack s(i $$:= kdata.Memory x1), Memory := x2\<rparr>)"
+    shows "wp (write c i) P E s"
+  unfolding write_def wp_def using assms by (auto simp add:wpsimps execute_simps split: prod.split)
+
+lemma wp_sinit[wprules]:
+  assumes "P Empty (stack_update i (kdata.Storage None) s)"
+  shows "wp (sinit i) P E s"
   unfolding sinit_def wp_def using assms by (auto simp add:wpsimps execute_simps)
 
-lemma (in Contract) wp_initStorage[wprule]:
+lemma wp_sdecl[wprules]:
+  assumes "\<And>x51 x52. t = SType.TArray x51 x52 \<Longrightarrow> wp (sinit i) P E s"
+      and "\<And>x6. t = SType.DArray x6 \<Longrightarrow> wp (sinit i) P E s"
+      and "\<And>x71 x72. t = SType.TMap x71 x72 \<Longrightarrow> wp (sinit i) P E s"
+      and "\<And>x8. t = SType.TEnum x8 \<Longrightarrow> wp (sinit i) P E s"
+      and "\<And>x. t = SType.TValue x \<Longrightarrow> E Err s"
+  shows "wp (sdecl t i) P E s"
+  unfolding wp_def apply (case_tac t) using assms by (auto simp add:wpsimps sdecl.simps execute_simps wp_def)
+
+lemma (in Contract) wp_initStorage[wprules]:
   assumes "P Empty (storage_update i v s)"
   shows "wp (initStorage i v) P E s"
   unfolding initStorage_def wp_def using assms by(auto simp add:wpsimps execute_simps)
 
-lemma (in Solidity) wp_init_balance[wprule]:
+lemma (in Solidity) wp_init_balance[wprules]:
   assumes "P Empty (balance_update (Balances s this + unat msg_value) s)"
   shows "wp init_balance P E s"
   unfolding init_balance_def wp_def using assms by (auto simp add:wpsimps execute_simps)
 
-lemma (in Contract) wp_assign_stack_kdvalue[wprule]:
-  assumes "Stack s $$ i = None \<Longrightarrow> E Err s"
-      and "\<And>x11 x12. Stack s $$ i = Some (kdata.Storage x11 x12) \<Longrightarrow> wp (storage_update_monad x12 is (K (sdata.Value v)) x11) P E s"
-      and "\<And>x2. Stack s $$ i = Some (kdata.Memory x2) \<Longrightarrow> wp (memory_update_monad (mvalue_update is x2 v)) P E s"
-      and "\<And>x31 x32. Stack s $$ i = Some (kdata.Calldata x31 x32) \<Longrightarrow> wp (throw Err) P E s"
-      and "\<And>x4. Stack s $$ i = Some (kdata.Value x4) \<Longrightarrow> P Empty (stack_update i (kdata.Value v) s)"
-  shows "wp (assign_stack i is (rvalue.Value v)) P E s"
-  by (vcg | auto simp add:assms stack_check_def)+
+lemma (in Solidity) wp_init_balance_np[wprules]:
+  assumes "P Empty (balance_update (Balances s this) s)"
+  shows "wp init_balance_np P E s"
+  unfolding init_balance_np_def wp_def using assms by (auto simp add:wpsimps execute_simps)
 
-lemma (in Contract) wp_assign_stack_monad[wprule]:
+lemma (in Solidity) wp_cinit[wprules]:
+  assumes "P Empty (calldata_update i c (stack_update i (kdata.Calldata (Some \<lparr>Location = i, Offset = []\<rparr>)) s))"
+  shows "wp (cinit (c:: 'a valtype call_data) i) P E s"
+  unfolding cinit_def  wp_def using assms by (auto simp add:wpsimps execute_simps)
+
+lemma (in Contract) wp_assign_stack_monad[wprules]:
   assumes "wp m (\<lambda>a. wp (lfold is \<bind> (\<lambda>is. assign_stack i is a \<bind> (\<lambda>_. return Empty))) P E) E s"
   shows "wp (assign_stack_monad i is m) P E s"
-  unfolding assign_stack_monad_def apply (rule wprule) using assms by simp
+  unfolding assign_stack_monad_def apply (rule wprules) using assms by simp
 
-lemma (in Contract) wp_storage_update_monad[wprule]:
+lemma (in Contract) wp_storage_update_monad[wprules]:
   assumes "\<And>y. updateStore (xs @ is) sd (state.Storage s this p) = Some y \<Longrightarrow> P Empty (storage_update p y s)"
       and "updateStore (xs @ is) sd (state.Storage s this p) = None \<Longrightarrow> E Err s"
   shows "wp (storage_update_monad xs is sd p) P E s"
-  unfolding storage_update_monad_def by (rule wprule | simp add: assms)+
+  unfolding storage_update_monad_def by (rule wprules | simp add: assms)+
 
-lemma (in Contract) wp_assign_storage1[wperule]:
+lemma (in Contract) wp_assign_storage1[wperules]:
   assumes "y = rvalue.Value v"
-      and "wp (storage_update_monad [] is (K (sdata.Value v)) i) P E s"
+      and "wp (storage_update_monad [] is (K (storage_data.Value v)) i) P E s"
     shows "wp (assign_storage i is y) P E s"
   using assms by simp
 
-lemma (in Contract) wp_assign_storage2[wprule]:
-  assumes "wp (storage_update_monad [] is (K (sdata.Value v)) i) P E s"
+lemma (in Contract) wp_assign_storage2[wprules]:
+  assumes "wp (storage_update_monad [] is (K (storage_data.Value v)) i) P E s"
     shows "wp (assign_storage i is (rvalue.Value v)) P E s"
   using assms by simp
 
-lemma (in Contract) wp_assign_storage_monad[wprule]:
+lemma (in Contract) wp_assign_storage_monad[wprules]:
   assumes "wp m (\<lambda>a. wp (lfold is \<bind> (\<lambda>is. assign_storage i is a)) P E) E s"
   shows "wp (assign_storage_monad i is m) P E s"
-  unfolding assign_storage_monad_def apply (rule wprule) using assms by simp
+  unfolding assign_storage_monad_def apply (rule wprules) using assms by simp
 
-lemma (in Contract) wp_stackLookup[wprule]:
+lemma (in Contract) wp_stackLookup[wprules]:
   assumes "wp (lfold es)
      (\<lambda>a. wp (stack_check x (\<lambda>k. return (rvalue.Value k))
                 (\<lambda>p. option Err (\<lambda>s. mlookup (state.Memory s) a p) \<bind>
-                      (\<lambda>v. case v of (l, md) \<Rightarrow> if mdata.is_Value md then return (rvalue.Value (mdata.vt md)) else return (rvalue.Memory l)))
+                      (\<lambda>l. option Err (\<lambda>s. state.Memory s $ l) \<bind>
+                            (\<lambda>md. if mdata.is_Value md then return (rvalue.Value (mdata.vt md))
+                                   else return (rvalue.Memory l))))
                 (\<lambda>p xs.
                     option Err (\<lambda>s. state.Calldata s $$ p \<bind> clookup (xs @ a)) \<bind>
-                    (\<lambda>sd. if cdata.is_Value sd then return (rvalue.Value (cdata.vt sd)) else return (rvalue.Calldata p (xs @ a))))
+                    (\<lambda>sd. if call_data.is_Value sd then return (rvalue.Value (call_data.vt sd))
+                           else return (rvalue.Calldata (Some \<lparr>Location = p, Offset = xs @ a\<rparr>))))
+                (return (rvalue.Calldata None))
                 (\<lambda>p xs.
                     option Err (\<lambda>s. slookup (xs @ a) (state.Storage s this p)) \<bind>
-                    (\<lambda>sd. if sdata.is_Value sd then return (rvalue.Value (sdata.vt sd)) else return (rvalue.Storage p (xs @ a)))))
+                    (\<lambda>sd. if storage_data.is_Value sd then return (rvalue.Value (storage_data.vt sd))
+                           else return (rvalue.Storage (Some \<lparr>Location = p, Offset = xs @ a\<rparr>))))
+                (return (rvalue.Storage None)))
             P E)
      E s"
   shows "wp (stackLookup x es) P E s"
   unfolding stackLookup_def apply (vcg) using assms by simp
 
-lemma (in Keccak256) wp_keccak256[wprule]:
+lemma (in Keccak256) wp_keccak256[wprules]:
   assumes "wp m (\<lambda>a. wp (return (keccak256 a)) P E) E s"
   shows "wp (keccak256_monad m) P E s"
-  unfolding keccak256_monad_def using assms by (rule wprule)+
+  unfolding keccak256_monad_def using assms by (rule wprules)+
 
-lemma (in Fallback) wp_transfer_monad[wprule]:
-  assumes "wp am
+lemma (in Keccak256) wp_encodeABI[wprules]:
+  assumes "wp (mfold m) (\<lambda>a. wp (return (encodeABI a)) P E) E s"
+  shows "wp (encodeABI_monad m) P E s"
+  unfolding encodeABI_monad_def using assms by (rule wprules)+ 
+
+lemma (in External) wp_transfer_monad[wprules]:
+  assumes " wp am
      (\<lambda>a. wp (readValue a \<bind>
                (\<lambda>av. readAddress av \<bind>
                       (\<lambda>a. vm \<bind>
                             (\<lambda>vk. readValue vk \<bind>
                                    (\<lambda>vv. readSint vv \<bind>
-                                          (\<lambda>v. assert Err (\<lambda>s. unat v \<le> Balances s this) \<bind>
-                                                (\<lambda>_. modify (\<lambda>s. balances_update this (Balances s this - unat v) s) \<bind>
-                                                      (\<lambda>_. modify (\<lambda>s. balances_update a (Balances s a + unat v) s) \<bind> (\<lambda>_. fallback a)))))))))
+                                          (\<lambda>v.
+assert Err (\<lambda>s. unat v \<le> Balances s this) \<bind>
+(\<lambda>_. modify (\<lambda>s. balance_update (Balances s this - unat v) s) \<bind>
+      (\<lambda>_. modify (\<lambda>s. balances_update a (Balances s a + unat v) s) \<bind>
+            (\<lambda>_. ecall (external call))))))))))
             P E)
      E s"
-  shows "wp (transfer_monad am vm) P E s"
-  unfolding transfer_monad_def apply (rule wprule)+ by (rule assms)
+  shows "wp (transfer_monad call am vm) P E s"
+  unfolding transfer_monad_def apply (rule wprules)+ by (rule assms)
 
-lemma wp_readValue[wprule]:
-  assumes "P (sdata.vt yp) s"
-  shows "wp (readValue (rvalue.Value (sdata.vt yp))) P E s"
+lemma wp_readValue[wprules]:
+  assumes "P (storage_data.vt yp) s"
+  shows "wp (readValue (rvalue.Value (storage_data.vt yp))) P E s"
   unfolding wp_def readValue.simps by (simp add:execute_return assms)
 
-lemma wp_readAddress[wprule]:
+lemma wp_readAddress[wprules]:
   assumes "P yp s"
   shows "wp (readAddress (Address yp)) P E s"
   unfolding wp_def readAddress.simps by (simp add:execute_return assms)
 
-lemma wp_stackCheck[wprule]:
-  assumes "\<And>x11 x12. Stack s $$ i = Some (kdata.Storage x11 x12) \<Longrightarrow> wp (sf x11 x12) P E s"
-      and "\<And>x2. Stack s $$ i = Some (kdata.Memory x2) \<Longrightarrow> wp (mf x2) P E s"
-      and "\<And>x31 x32. Stack s $$ i = Some (kdata.Calldata x31 x32) \<Longrightarrow> wp (cf x31 x32) P E s"
-      and "\<And>x4. Stack s $$ i = Some (kdata.Value x4) \<Longrightarrow> wp (kf x4) P E s"
+lemma wp_stackCheck[wprules]:
+  assumes "\<And>p. Stack s $$ i = Some (kdata.Storage (Some p)) \<Longrightarrow> wp (sf (Location p) (Offset p)) P E s"
+      and "\<And>l. Stack s $$ i = Some (kdata.Memory l) \<Longrightarrow> wp (mf l) P E s"
+      and "\<And>p. Stack s $$ i = Some (kdata.Calldata (Some p)) \<Longrightarrow> wp (cf (Location p) (Offset p)) P E s"
+      and "\<And>v. Stack s $$ i = Some (kdata.Value v) \<Longrightarrow> wp (kf v) P E s"
       and "Stack s $$ i = None \<Longrightarrow> E Err s"
-    shows "wp (stack_check i kf mf cf sf) P E s"
+      and "Stack s $$ i = Some (kdata.Storage None) \<Longrightarrow> wp sp P E s"
+      and "Stack s $$ i = Some (kdata.Calldata None) \<Longrightarrow> wp cp P E s"
+    shows "wp (stack_check i kf mf cf cp sf sp) P E s"
   unfolding wp_def stack_check_def
   apply (simp add:execute_simps applyf_def get_def return_def bind_def)
   apply (cases "Stack s $$ i")
   apply (auto simp add:execute_simps)
   defer apply (case_tac a)
-  apply (fold wp_def) using assms by auto
+  apply (fold wp_def) using assms
+  by (auto simp add:wprules)
 
 lemma execute_normal:
   assumes "execute x s = Normal (a, b)"
@@ -694,49 +821,77 @@ lemma execute_exception:
   assumes "execute x s = Exception (a, b)"
   shows "effect x s (Inr (a,b))" using assms unfolding effect_def by simp
 
-lemma(in Fallback) wp_fallback:
-  fixes call:: "'a expression_monad"
-  assumes "\<forall>s r. P' s \<and> effect call s r \<longrightarrow> inv r P' E'"
-      and "P' s"
-      and "\<And>a s''. state.Stack s'' = state.Stack s \<Longrightarrow> state.Memory s'' = state.Memory s \<Longrightarrow> state.Calldata s'' = state.Calldata s \<Longrightarrow> P' s'' \<Longrightarrow> P a s''"
-      and "\<And>x s''. state.Stack s'' = state.Stack s \<Longrightarrow> state.Memory s'' = state.Memory s \<Longrightarrow> state.Calldata s'' = state.Calldata s \<Longrightarrow> E' s'' \<Longrightarrow> E x s''"
-    shows "wp (fallback a) P E s"
-  using fallback_invariant[OF assms(1,2)] unfolding inv_def
-  apply (simp add: wp_def split:result.split)
-  apply (auto) apply (drule execute_normal) using assms(3) apply force
-  apply (drule execute_exception) using assms(4) by force
-
 lemma (in Contract) inv_wp:
   assumes "effect m s r"
       and "wp m (K x) (K y) s"
     shows "inv r x y"
   using assms unfolding inv_def effect_def wp_def apply (cases "execute m s") by auto
 
-lemma (in Contract) wp_storeArrayLength[wprule]:
+lemma (in Contract) post_wp:
+  assumes "effect m s r"
+      and "wp m (\<lambda>r s'. Is s r s') (K Ie) s"
+    shows "post s r Is Ie"
+  using assms unfolding post_def effect_def wp_def apply (cases "execute m s") by auto
+
+lemma (in Contract) wp_storeArrayLength[wprules]:
   assumes "wp (lfold xs)
      (\<lambda>a. wp (option Err (\<lambda>s. slookup a (state.Storage s this v)) \<bind>
-              (\<lambda>sd. storage_check sd (K (throw Err)) (\<lambda>sa. return (rvalue.Value (Sint (word_of_nat (length (sdata.ar sd)))))) (K (throw Err))))
+              (\<lambda>sd. storage_check sd (K (throw Err)) (\<lambda>sa. return (rvalue.Value (Uint (word_of_nat (length (storage_data.ar sd)))))) (K (throw Err))))
            P E)
      E s"
   shows "wp (storeArrayLength v xs) P E s"
   unfolding storeArrayLength_def apply vcg using assms by simp
 
-lemma (in Contract) wp_storearrayLength[wprule]:
+lemma (in Contract) wp_storeArrayLengthSafe[wprules]:
+  assumes "wp (lfold xs)
+     (\<lambda>a. wp (option Err (\<lambda>s. slookup a (state.Storage s this v)) \<bind>
+              (\<lambda>sd. storage_check sd (K (throw Err))
+                     (\<lambda>sa. if length (storage_data.ar sd) < 2 ^ 256
+                           then return (rvalue.Value (Uint (word_of_nat (length (storage_data.ar sd))))) else throw Err)
+                     (K (throw Err))))
+           P E)
+     E s"
+  shows "wp (storeArrayLengthSafe v xs) P E s"
+  unfolding storeArrayLengthSafe_def apply vcg using assms by simp
+
+lemma (in Contract) wp_arrayLength[wprules]:
+  assumes "wp (lfold xs)
+     (\<lambda>a. wp (stack_check v (K (throw Err))
+                (\<lambda>p. option Err (\<lambda>s. mlookup (state.Memory s) a p) \<bind>
+                      (\<lambda>l. option Err (\<lambda>s. state.Memory s $ l) \<bind>
+                            (\<lambda>md. if mdata.is_Array md
+                                   then return (rvalue.Value (Uint (word_of_nat (length (mdata.ar md))))) else throw Err)))
+                (\<lambda>p xs.
+                    option Err (\<lambda>s. state.Calldata s $$ p \<bind> clookup (xs @ a)) \<bind>
+                    (\<lambda>sd. if call_data.is_Array sd then return (rvalue.Value (Uint (word_of_nat (length (call_data.ar sd)))))
+                           else throw Err))
+                (throw Err)
+                (\<lambda>p xs.
+                    option Err (\<lambda>s. slookup (xs @ a) (state.Storage s this p)) \<bind>
+                    (\<lambda>sd. if storage_data.is_Array sd then return (rvalue.Value (Uint (word_of_nat (length (storage_data.ar sd)))))
+                           else throw Err))
+                (throw Err))
+            P E)
+     E s"
+  shows "wp (arrayLength v xs) P E s"
+  unfolding arrayLength_def apply vcg using assms by simp
+
+lemma (in Contract) wp_storearrayLength[wprules]:
   assumes "slookup [] (state.Storage s this STR ''proposals'') = None \<Longrightarrow> E Err s"
  and "wp (storage_check (state.Storage s this STR ''proposals'') (K (throw Err))
-         (\<lambda>sa. return (rvalue.Value (Sint (word_of_nat (length (sdata.ar (state.Storage s this STR ''proposals''))))))) (K (throw Err)))
+         (\<lambda>sa. return (rvalue.Value (Uint (word_of_nat (length (storage_data.ar (state.Storage s this STR ''proposals''))))))) (K (throw Err)))
      P E s"
   shows "wp (storeArrayLength STR ''proposals'' []) P E s"
   unfolding storeArrayLength_def apply vcg using assms apply simp apply vcg done
 
-lemma (in Contract) wp_storage_check[wprule]:
-  assumes "\<And>v. sd = sdata.Value v \<Longrightarrow> wp (vf v) P E s"
-     and "\<And>a. sd = sdata.Array a \<Longrightarrow> wp (af a) P E s"
-     and "\<And>m. sd = sdata.Map m \<Longrightarrow> wp (mf m) P E s"
+lemma (in Contract) wp_storage_check[wprules]:
+  assumes "\<And>v. sd = storage_data.Value v \<Longrightarrow> wp (vf v) P E s"
+     and "\<And>a. sd = storage_data.Array a \<Longrightarrow> wp (af a) P E s"
+     and "\<And>m. sd = storage_data.Map m \<Longrightarrow> wp (mf m) P E s"
   shows "wp (storage_check sd vf af mf) P E s"
   using assms apply (cases sd) by (simp add:wpsimps)+
 
-lemma (in Contract) wp_allocate[wprule]:
+lemma (in Contract) wp_allocate[wprules]:
   assumes "wp (lfold es)
      (\<lambda>a. wp (option Err (\<lambda>s. slookup a (state.Storage s this i) \<bind> push d) \<bind>
               (\<lambda>ar. storage_update_monad [] a (K ar) i))
@@ -745,6 +900,50 @@ lemma (in Contract) wp_allocate[wprule]:
   shows "wp (allocate i es d) P E s"
   unfolding allocate_def apply vcg using assms by simp
 
-declare list_update_safe_def [wpsimps]
+lemma (in Contract) wp_create_memory_array[wprules]:
+  assumes "wp sm
+     (\<lambda>a. wp (case a of
+              rvalue.Value (Uint s') \<Rightarrow>
+                Solidity.write (adata.Array (array (unat s') (cdefault t))) i
+              | rvalue.Value _ \<Rightarrow> throw Err | _ \<Rightarrow> throw Err)
+           P E)
+     E s"
+  shows "wp (create_memory_array i t sm) P E s"
+  unfolding create_memory_array_def apply vcg using assms by simp
+
+text \<open>
+  Using postconditions for WP
+\<close>
+lemma (in Solidity) wp_post:
+  assumes "(\<And>r. effect (c x) s r \<Longrightarrow> post s r P' (K True))"
+      and "\<And>a sa. P' s a sa \<Longrightarrow> P a sa"
+      and "\<And>sa e. Q e sa"
+    shows "wp (c x) P Q s"
+  using assms unfolding wp_def effect_def post_def inv_state_def
+  by (cases "execute (c x) s") (auto)
+
+declare(in Contract) wp_stackCheck[wprules del]
+
+lemma (in Contract) wp_assign_stack_kdvalue[wprules]:
+  assumes "Stack s $$ i = None \<Longrightarrow> E Err s"
+      and "\<not>(\<exists>x2. Stack s $$ i = Some (kdata.Memory x2))"
+      and "Stack s $$ i = Some (kdata.Storage None) \<Longrightarrow> E Err s"
+      and "Stack s $$ i = Some (kdata.Calldata None) \<Longrightarrow> E Err s"
+      and "\<And>aa. Stack s $$ i = Some (kdata.Storage (Some aa)) \<Longrightarrow>
+          wp (storage_update_monad (Offset aa) is (K (storage_data.Value v)) (Location aa)) P E s"
+      and "\<And>x4. Stack s $$ i = Some (kdata.Value x4) \<Longrightarrow>
+          wp (modify (stack_update i (kdata.Value v)) \<bind> (\<lambda>a. return Empty)) P E s"
+      and "\<And>a. Stack s $$ i = Some (kdata.Calldata (Some a)) \<Longrightarrow> E Err s"
+    shows "wp (assign_stack i is (rvalue.Value v)) P E s"
+  apply (vcg | auto simp add:assms stack_check_def)+
+  using assms apply blast
+  by (vcg | auto simp add:assms stack_check_def)+
+declare(in Contract) wp_stackCheck[wprules]
+
+declare write.simps [simp del]
+declare mupdate.simps [simp del]
+declare mlookup.simps [simp del]
+declare alookup.simps [simp del]
+declare locations.simps [simp del]
 
 end

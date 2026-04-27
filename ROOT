@@ -1,18 +1,26 @@
 chapter AFP
 
-session "Solidity-dev" = "HOL-Library" +
+session "Isabelle-Solidity" = "HOL-Library" +
   options [document = pdf, document_output = "output"]
   sessions
     "HOL-Eisbach"
+    "Finite-Map-Extras"
   theories
     Utils
     State_Monad
+    Memory
+    Stores
+    State
     Solidity
-    Unit_Tests
+    Contract
+    WP
     Solidity_Main
+    Unit_Tests
+    Bank
     Token
     Casino
     Voting
+    SimpleAuction
   document_files
     "root.tex"
     "orcidlink.sty"

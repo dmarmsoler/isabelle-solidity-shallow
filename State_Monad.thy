@@ -73,7 +73,7 @@ where "bind f g = create (\<lambda>s. (case (execute f) s of
                     | Exception e \<Rightarrow> Exception e
                     | NT \<Rightarrow> NT))"
 
-adhoc_overloading Monad_Syntax.bind bind
+adhoc_overloading Monad_Syntax.bind \<rightleftharpoons> bind
 
 lemma execute_bind [execute_simps]:
   "execute f s = Normal (x, s') \<Longrightarrow> execute (f \<bind> g) s = execute (g x) s'"
@@ -230,14 +230,14 @@ lemma execute_modify [execute_simps]:
   "execute (modify f) s = Normal ((), f s)"
   unfolding modify_def by (auto simp add:execute_simps)
 
-primrec mfold :: "('a,'e,'s) state_monad \<Rightarrow> nat \<Rightarrow> ('a list,'e,'s) state_monad"
+primrec mfold :: "('a,'e,'s) state_monad list \<Rightarrow> ('a list,'e,'s) state_monad"
   where
-    "mfold m 0 = return []"
-  | "mfold m (Suc n) =
+    "mfold [] = return []"
+  | "mfold (m # ms) =
       do {
-        l \<leftarrow> m;
-        ls \<leftarrow> mfold m n;
-        return (l # ls)
+        x \<leftarrow> m;
+        xs \<leftarrow> mfold ms;
+        return (x # xs)
       }"
 
 subsection \<open>Some basic examples\<close>
@@ -343,6 +343,7 @@ by (fact sm_interpretation)(simp add: sm_lub_empty)
 named_theorems mono
 
 declare sm.const_mono[mono]
+declare Partial_Function.call_mono[mono]
 
 text \<open>The success predicate requires a state monad sm starting in state s to terminate successfully in state s' with return value a.\<close>
 
@@ -475,5 +476,34 @@ lemma return_monad_mono[mono]: "mono_sm (\<lambda>_. return x)"
 
 lemma option_monad_mono[mono]: "mono_sm (\<lambda>_. option E x)"
   by (simp add: monotoneI sm_ordI)
+
+definition exc:: "('a, 'b, 'c) state_monad \<Rightarrow> ('a, 'b, 'c) state_monad"
+  where "exc m \<equiv> create (\<lambda>s. case execute m s of Normal (v,s') \<Rightarrow> Normal (v, s')
+                                               | Exception (e, s') \<Rightarrow> Exception (e, s)
+                                               | NT \<Rightarrow> NT)"
+
+lemma exc_mono[mono]:
+  fixes m::"('b \<Rightarrow> ('c, 'e, 'f) state_monad) \<Rightarrow> ('x, 'y, 'z) state_monad"
+  assumes mf: "mono_sm (\<lambda>call. (m call))"
+  shows "mono_sm (\<lambda>call. (exc (m call)))"
+
+proof (rule monotoneI)
+  fix f g :: "'b \<Rightarrow> ('c, 'e, 'f) state_monad"
+  assume fg: "sm.le_fun f g"
+  then have 1: "sm_ord (m f) (m g)" using mf by (auto dest: monotoneD)
+  show "sm_ord (exc (m f)) (exc (m g))"
+  proof (rule sm_ordI)
+    fix h
+    show "execute (exc (m f)) h = NT \<or> execute (exc (m f)) h = execute (exc (m g)) h"
+    proof (rule sm_ordE[OF 1, of h])
+      assume "execute (m f) h = NT"
+      then show "execute (exc (m f)) h = NT \<or> execute (exc (m f)) h = execute (exc (m g)) h" unfolding exc_def by (simp add:execute_simps)
+    next
+      assume "execute (m f) h = execute (m g) h"
+      then show "execute (exc (m f)) h = NT \<or> execute (exc (m f)) h = execute (exc (m g)) h" unfolding exc_def by (simp add:execute_simps)
+    qed
+  qed
+qed
+
 
 end

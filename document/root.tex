@@ -102,6 +102,8 @@ In this chapter, we formalize the different types of stores for Solidity.
 In particular, we present a formalization for Storage, Memory, Calldata, and Stack.
 Then we define the state consisting of a configuration of all the stores as well as account balances.
 
+\input{Memory.tex}
+\input{Stores.tex}
 \input{State.tex}
 
 \chapter{Expressions and Statements}
@@ -137,9 +139,13 @@ invariants for Solidity smart contracts.
 
 \input{Token.tex}
 
+\input{Bank.tex}
+
 \input{Casino.tex}
 
 \input{Voting.tex}
+
+\input{SimpleAuction.tex}
 
 %\IfFileExists{root.bib}{%
 %    \bibliography{root}

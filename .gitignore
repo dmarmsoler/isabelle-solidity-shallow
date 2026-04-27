@@ -1,2 +1,7 @@
-
-document/orcidlink.sty
+*~
+\#*\#
+*.marks
+/output
+*.log
+.gitattributes
+document.pdf

@@ -147,7 +147,6 @@ locale Method =
   fixes msg_sender :: "'a::address" (*address of calling contract*)
     and msg_value :: "256 word" (*money send*)
     and timestamp :: "256 word" (*time stamp of a block*)
-  assumes sender_neq_null: "msg_sender \<noteq> null"
   assumes less_bound: "unat timestamp < 2^256"
 begin
 

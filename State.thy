@@ -162,8 +162,6 @@ record ('a::address) state =
   Stack:: "('a::address valtype) stack"
   Balances::"('a::address) balances"
 
-definition sameState where "sameState s s' \<equiv> state.Stack s' = state.Stack s \<and> state.Memory s' = state.Memory s \<and> state.Calldata s' = state.Calldata s"
-
 subsection \<open>Update Function\<close>
 
 datatype ex = Err

@@ -2,8 +2,7 @@ section\<open> The Main Entry Point\<close>
 theory
   Solidity_Main
 imports
-  Contract
-  WP
+  WP Contract
 begin
 text\<open>
   This theory is the main entry point into the session Solidity, i.e., it serves the same purpose

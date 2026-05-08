@@ -11,111 +11,97 @@ text \<open>
 
 subsection \<open>Specification\<close>
 
+abbreviation "balances \<equiv> STR ''balances''"
+abbreviation "bal \<equiv> STR ''bal''"
+
 contract Bank
-  for "STR ''balances''": "sdata.Map (mapping (sdata.Value sint))"
+  for balances: "SType.TMap (SType.TValue TAddress) (SType.TValue TSint)"
 
-constructor where
-  "skip_monad"
+constructor payable
+where
+  "\<langle>skip\<rangle>"
 
-cmethod deposit where
-  "assign_storage_monad (STR ''balances'') [sender_monad]
-    (plus_monad_safe (storeLookup (STR ''balances'') [sender_monad]) (value_monad))" ,
+cfunction deposit external payable
+where
+  "balances [\<langle>sender\<rangle>] ::=\<^sub>s balances ~\<^sub>s [\<langle>sender\<rangle>] \<langle>+\<rangle> \<langle>value\<rangle>" ,
 
-cmethod withdraw where
+cfunction withdraw external payable
+where
   "do {
-    init (STR ''bal'') sint;
-    assign_stack_monad (STR ''bal'') [] (storeLookup (STR ''balances'') [sender_monad]);
-    assign_storage_monad (STR ''balances'') [sender_monad] (sint_monad 0);
-    transfer_monad (sender_monad) (stackLookup (STR ''bal'') [])
+    bal :: TSint;
+    bal [] ::= balances ~\<^sub>s [\<langle>sender\<rangle>];
+    balances [\<langle>sender\<rangle>] ::=\<^sub>s \<langle>sint\<rangle> 0;
+    \<langle>transfer\<rangle> \<langle>sender\<rangle> (bal ~ [])
   }"
 
-section \<open>Verifying an Invariant\<close>
+context bank
+begin
+  thm constructor_def
+  thm deposit_def
+  thm withdraw_def
+end
+
+subsection \<open>Verifying an Invariant\<close>
+
+abbreviation "SUMM x \<equiv> \<Sum>ad\<in>UNIV. unat (valtype.uint (storage_data.vt (x (Address ad))))"
 
 context Solidity
 begin
 
-abbreviation "SUMM x \<equiv> \<Sum>ad\<in>UNIV. unat (valtype.sint (sdata.vt (x (Address ad))))"
-
 lemma 1:
+    fixes bal
   assumes "SUMM bal \<le> Balances s this"
-      and "bal (Address msg_sender) = sdata.Value (Sint y)"
+      and "bal (Address msg_sender) = storage_data.Value (Uint y)"
       and "unat y + unat msg_value < 2^256"
-    shows "(\<Sum>ad\<in>UNIV. unat (valtype.sint (sdata.vt (if ad = msg_sender then sdata.Value (Sint (y + msg_value)) else bal (Address ad)))))
+    shows "(\<Sum>ad\<in>UNIV. unat (valtype.uint (storage_data.vt (if ad = msg_sender then storage_data.Value (Uint (y + msg_value)) else bal (Address ad)))))
            \<le> Balances s this + unat msg_value"
 proof -
-  from sum_addr[of _ msg_sender] have "(\<Sum>ad|ad \<in> UNIV \<and> ad \<noteq> msg_sender. unat (valtype.sint (sdata.vt (bal (Address ad))))) +
-    unat (valtype.sint (sdata.vt (bal (Address msg_sender)))) + unat msg_value \<le> Balances s this + unat msg_value"
+  from sum_addr[of _ msg_sender] have "(\<Sum>ad|ad \<in> UNIV \<and> ad \<noteq> msg_sender. unat (valtype.uint (storage_data.vt (bal (Address ad))))) +
+    unat (valtype.uint (storage_data.vt (bal (Address msg_sender)))) + unat msg_value \<le> Balances s this + unat msg_value"
   using assms(1) by simp
-  moreover have "unat (valtype.sint (sdata.vt (sdata.Value (Sint (y + msg_value))))) \<le> unat (valtype.sint (sdata.vt (bal (Address msg_sender)))) + unat msg_value"
+  moreover have "unat (valtype.uint (storage_data.vt (storage_data.Value (Uint (y + msg_value))))) \<le> unat (valtype.uint (storage_data.vt (bal (Address msg_sender)))) + unat msg_value"
     using assms(2,3) unat_add_lem[where ?'a =256] by simp
   ultimately show ?thesis using sum_addr[of _ msg_sender] by simp
 qed
 
 lemma 2:
+    fixes bal
   assumes "SUMM bal \<le> Balances s this"
-      and "bal (Address msg_sender) = sdata.Value (Sint y)"
-    shows "(\<Sum>ad \<in> UNIV. unat (valtype.sint (sdata.vt (if ad = msg_sender then sdata.Value (Sint 0) else bal (Address ad)))))
+      and "bal (Address msg_sender) = storage_data.Value (Uint y)"
+    shows "(\<Sum>ad \<in> UNIV. unat (valtype.uint (storage_data.vt (if ad = msg_sender then storage_data.Value (Uint 0) else bal (Address ad)))))
           \<le> Balances s this + unat msg_value - unat y"
 proof -
-  from sum_addr[of _ msg_sender] have "(\<Sum>ad|ad \<in> UNIV \<and> ad \<noteq> msg_sender. unat (valtype.sint (sdata.vt (bal (Address ad))))) +
-    (unat (valtype.sint (sdata.vt (bal (Address msg_sender)))) + unat msg_value - unat y) \<le> Balances s this + unat msg_value - unat y"
+  from sum_addr[of _ msg_sender] have "(\<Sum>ad|ad \<in> UNIV \<and> ad \<noteq> msg_sender. unat (valtype.uint (storage_data.vt (bal (Address ad))))) +
+    (unat (valtype.uint (storage_data.vt (bal (Address msg_sender)))) + unat msg_value - unat y) \<le> Balances s this + unat msg_value - unat y"
   using assms(1,2) by simp
-  moreover have "unat (valtype.sint (sdata.vt (sdata.Value (Sint 0)))) \<le> unat (valtype.sint (sdata.vt (bal (Address msg_sender)))) + unat msg_value - unat y"
+  moreover have "unat (valtype.uint (storage_data.vt (storage_data.Value (Uint 0)))) \<le> unat (valtype.uint (storage_data.vt (bal (Address msg_sender)))) + unat msg_value - unat y"
     using assms(2) unat_add_lem[where ?'a =256] by simp
   ultimately show ?thesis using sum_addr[of _ msg_sender] by simp
 qed
 
 lemma 3:
+    fixes bal
   assumes "SUMM bal \<le> Balances s this"
-     and "bal (Address msg_sender) = sdata.Value (Sint y)"
-  shows "(\<Sum>ad\<in>UNIV. unat (valtype.sint (sdata.vt (if ad = msg_sender then sdata.Value (Sint 0) else bal (Address ad)))))
+     and "bal (Address msg_sender) = storage_data.Value (Uint y)"
+  shows "(\<Sum>ad\<in>UNIV. unat (valtype.uint (storage_data.vt (if ad = msg_sender then storage_data.Value (Uint 0) else bal (Address ad)))))
        \<le> Balances s this + unat msg_value"
   using 2[OF assms] by simp
 
 lemma 4:
+    fixes bal
   assumes "SUMM bal \<le> Balances s this"
-     and "bal (Address msg_sender) = sdata.Value (Sint y)"
+     and "bal (Address msg_sender) = storage_data.Value (Uint y)"
      and " msg_sender = this"
-  shows "(\<Sum>ad\<in>UNIV. unat (valtype.sint (sdata.vt (if ad = this then sdata.Value (Sint 0) else bal (Address ad)))))
+  shows "(\<Sum>ad\<in>UNIV. unat (valtype.uint (storage_data.vt (if ad = this then storage_data.Value (Uint 0) else bal (Address ad)))))
        \<le> Balances s this + unat msg_value"
   using 3[OF assms(1-2)] assms(3) by simp
 
-lemma 5:
-  assumes " \<forall>x. \<exists>y. bal x = sdata.Value (Sint y)"
-     and "SUMM bal \<le> Balances s this"
-     and "\<not> sdata.is_Value (bal (Address msg_sender))"
-  shows "(\<Sum>ad \<in> UNIV. unat (valtype.sint (sdata.vt (if ad = msg_sender then sdata.Value (Sint 0) else bal (Address ad)))))
-           \<le> Balances s this + unat msg_value"
-proof -
-  from assms(1) obtain y where "bal (Address msg_sender) = sdata.Value (Sint y)" by auto
-  then have "sdata.is_Value (bal (Address msg_sender))" by simp
-  with assms show ?thesis by simp
-qed
-
-definition sum_bal:: "(id \<Rightarrow> 'a sdata) \<times> nat \<Rightarrow> bool"
-  where "sum_bal sb \<equiv>
-          (\<exists>x. (fst sb) (STR ''balances'') = sdata.Map x \<and> (\<forall>y. \<exists>z. x y = sdata.Value (Sint z))) \<and>
-          (\<forall>x. (fst sb) (STR ''balances'') = sdata.Map x \<longrightarrow> (snd sb) \<ge> SUMM x)"
-
-text \<open>We need to create introduction and elimination rules for the invariant and add it to the wprule and wperule lists.\<close>
-
-lemma sum_balI[wprule]:
-  assumes "s (STR ''balances'') = sdata.Map bal"
-      and "\<And>x. \<exists>y. bal x = sdata.Value (Sint y)"
-      and "b \<ge> SUMM bal"
-  shows "sum_bal (s, b)"
-  unfolding sum_bal_def using assms by simp
-
-lemma sum_balE[wperule]:
-  assumes "sum_bal (s, b)"
-  obtains bal where "s (STR ''balances'') = sdata.Map bal"
-                and "\<forall>x. \<exists>y. bal x = sdata.Value (Sint y)"
-                and "b \<ge> SUMM bal"
-  using assms unfolding sum_bal_def by auto
+text \<open>We need to create introduction and elimination rules for the invariant and add it to the wprules and wperule lists.\<close>
 
 lemma(in Solidity) bal_msg_sender:
-  assumes "\<forall>x. \<exists>y. bal x = sdata.Value (Sint y)"
-  obtains y where "bal (Address msg_sender) = sdata.Value (Sint y)"
+  fixes bal
+  assumes "\<forall>x. \<exists>y. bal x = storage_data.Value (Uint y)"
+  obtains y where "bal (Address msg_sender) = storage_data.Value (Uint y)"
   using assms by auto
 
 text \<open>
@@ -123,95 +109,120 @@ text \<open>
   To this end our package provides a keyword invariant which takes a property as parameter and generates proof obligations.
 \<close>
 end
-context Solidity
-begin
 
-lemma constructor_bank:
-  assumes "effect bank_constructor s r"
-    shows "inv r (inv_state sum_bal) (inv_state sum_bal)"
-  using assms
-  apply (erule_tac inv_wp)
-  unfolding bank_constructor_def inv_state_def
-  by (vcg | auto)+
+invariant sum_bal sb where
+    "\<forall>x. (fst sb) balances = storage_data.Map x \<longrightarrow> (snd sb) \<ge> SUMM x"
+  for "Bank"
 
-lemma deposit:
-    fixes call:: "'a bank \<Rightarrow> 'a expression_monad"
-  assumes "effect (deposit call) s r"
-      and "inv_state sum_bal s" 
-    shows "inv r (inv_state sum_bal) (inv_state sum_bal)"
-  using assms
-  apply (erule_tac inv_wp)
-  unfolding deposit_def inv_state_def
-  by (vcg | auto simp add:1 | rule bal_msg_sender, assumption)+
+definition(in Solidity) deposit_post where
+"deposit_post start_state return_value end_state \<equiv>
+  \<exists>x y. state.Storage start_state this STR ''balances'' = storage_data.Map x
+  \<and> state.Storage end_state this STR ''balances'' = storage_data.Map y
+  \<and> valtype.uint (storage_data.vt (y (Address msg_sender))) = valtype.uint (storage_data.vt (x (Address msg_sender))) + msg_value"
 
-lemma withdraw_sender:
-  fixes call:: "'a bank \<Rightarrow> 'a expression_monad"
-  assumes "\<And>x. \<forall>s r. inv_state sum_bal s \<and> effect (call x) s r \<longrightarrow> local.inv r (inv_state sum_bal) (inv_state sum_bal)"
-      and "effect (withdraw call) s r"
-      and "inv_state sum_bal s"
-      and "msg_sender \<noteq> this"
-    shows "inv r (inv_state sum_bal) (inv_state sum_bal)"
-  using assms(2-)
-  apply (erule_tac inv_wp)
-  unfolding withdraw_def inv_state_def
-  apply (vcg | auto)+
-  apply (rule bal_msg_sender, assumption)
-  apply (vcg wprule: wp_fallback[OF assms(1)] | auto)+
-  apply (simp add:2)
-  apply (simp add:wpsimps)+
-  apply (vcg | auto)+
-  apply (simp add:3)
-  apply (simp add:wpsimps)+
-  by (vcg wprule: wp_fallback[OF assms(1)] | auto)+
+declare(in bank) sum_balI[wprules del]
 
-lemma (in Solidity) subst:
-  "msg_sender = this \<Longrightarrow> wp sender_monad P Q s \<Longrightarrow> wp (Method.sender_monad this) P Q s" by simp
+verification sum_bal:
+  sum_bal
+  deposit ("K True", deposit_post) and
+  withdraw
+  for "Bank"
+proof -
+  show
+    "\<And>call.
+      (\<And>x h r. effect (call x) h r \<Longrightarrow> vcond x h r)
+      \<Longrightarrow> effect (constructor call) s r
+      \<Longrightarrow> post s r (K (K (inv_state sum_bal))) (K True)"
+    unfolding constructor_def
+    apply (erule post_exc_true, erule_tac post_wp)
+    unfolding  inv_state_def
+  by (vcg wprules: sum_balI | auto)+
 
-(*
-  Fixme: Here I do have some problems with the simplifier.
-*)
-lemma withdraw_this:
-  fixes call:: "'a bank \<Rightarrow> 'a expression_monad"
-  assumes "\<And>x. \<forall>s r. inv_state sum_bal s \<and> effect (call x) s r \<longrightarrow> local.inv r (inv_state sum_bal) (inv_state sum_bal)"
-      and "effect (withdraw call) s r"
-      and "inv_state sum_bal s"
-      and "msg_sender = this"
-    shows "inv r (inv_state sum_bal) (inv_state sum_bal)"
-  using assms(2-)
-  apply (erule_tac inv_wp)
-  unfolding withdraw_def inv_state_def
-  apply (vcg wprule: wp_fallback[OF assms(1)] | auto)+
-  apply (rule bal_msg_sender, assumption)
-  apply (vcg wprule: wp_fallback[OF assms(1)] | simp add: 4)+
-  apply (rule bal_msg_sender, assumption)
-  apply (rule subst,assumption,wp)
-  apply (vcg wprule: wp_fallback[OF assms(1)])
-  apply (rule subst,assumption, wp)
-  apply (vcg wprule: wp_fallback[OF assms(1)])
-  apply (rule subst,assumption,wp)
-  by (wp wprule: wp_fallback[OF assms(1)] | auto simp add:wpsimps 4)+
+  show
+    "\<And>call.
+      (\<And>x h r. effect (call x) h r \<Longrightarrow> vcond x h r)
+      \<Longrightarrow> effect (deposit call) s r
+      \<Longrightarrow> inv_state sum_bal s
+      \<Longrightarrow> post s r (K (K (inv_state sum_bal))) (K True)"
+    unfolding deposit_def
+    apply (erule post_exc_true, erule_tac post_wp)
+    unfolding inv_state_def deposit_post_def
+    apply vcg
+         apply (auto simp add:wpsimps)
+     apply (rule bal_msg_sender, assumption)
+     apply vcg
+      apply (auto simp add: wpsimps intro!: sum_balI 1)
+    apply vcg
+      apply (auto simp add:wpsimps)
+    apply (rule bal_msg_sender, assumption)
+    by vcg
 
-lemma withdraw:
-  fixes call:: "'a bank \<Rightarrow> 'a expression_monad"
-  assumes "\<And>x. \<forall>s r. inv_state sum_bal s \<and> effect (call x) s r \<longrightarrow> local.inv r (inv_state sum_bal) (inv_state sum_bal)"
-      and "effect (withdraw call) s r"
-      and "inv_state sum_bal s"
-    shows "inv r (inv_state sum_bal) (inv_state sum_bal)"
-proof (cases "msg_sender = this")
-  case True
-  show ?thesis using withdraw_this[OF assms True] .
-next
-  case False
-  show ?thesis using withdraw_sender[OF assms False] .
+  show
+    "\<And>call.
+      (\<And>x h r. effect (call x) h r \<Longrightarrow> vcond x h r)
+      \<Longrightarrow> effect (deposit call) s r
+      \<Longrightarrow> inv_state sum_bal s
+      \<Longrightarrow> K True s
+      \<Longrightarrow> post s r deposit_post (K True)"
+    unfolding deposit_def
+    apply (erule post_exc_true, erule_tac post_wp)
+    unfolding inv_state_def deposit_post_def
+    apply vcg
+         apply (auto simp add:wpsimps)
+     apply (rule bal_msg_sender, assumption)
+     apply vcg
+      apply (auto simp add: wpsimps intro!: sum_balI 1)
+    apply vcg
+      apply (auto simp add:wpsimps)
+    apply (rule bal_msg_sender, assumption)
+    by vcg
+
+  show
+    "\<And>call.
+      (\<And>x h r. effect (call x) h r \<Longrightarrow> vcond x h r)
+      \<Longrightarrow> effect (withdraw call) s r
+      \<Longrightarrow> inv_state sum_bal s
+      \<Longrightarrow> post s r (K (K (inv_state sum_bal))) (K True)"
+    unfolding withdraw_def
+    apply (erule post_exc_true, erule_tac post_wp)
+    unfolding inv_state_def
+    apply (case_tac "msg_sender = this")
+     apply (vcg)
+     apply (auto simp add:wpsimps)
+     apply (rule_tac bal_msg_sender, assumption)
+    apply (vcg)
+     apply (rule_tac s = msg_sender in subst,assumption)
+     apply (vcg)
+    apply (rule subst,assumption)
+           apply (vcg)
+             apply (rule subst,assumption)
+             apply (vcg)
+             apply (auto simp add:wpsimps)
+     apply (vcg)
+        apply (auto simp add:wpsimps)
+     apply (vcg)
+        apply (rule_tac mp = "mp(Address msg_sender := storage_data.Value (Uint 0))" in sum_balI)
+         apply vcg
+         apply (auto simp add:wpsimps 4)
+      apply vcg
+      apply (rule_tac mp = mpa in sum_balI)
+       apply vcg
+          apply (auto)
+     apply vcg
+        apply (auto simp add:wpsimps)
+     apply (rule bal_msg_sender, assumption)
+     apply vcg
+        apply (rule_tac mp = "mp(Address msg_sender := storage_data.Value (Uint 0))" in sum_balI)
+         apply (simp add:2 wpsimps)
+        apply (simp add:wpsimps)
+       apply vcg
+    done
 qed
 
+context bank_external
+begin
+  thm sum_bal
+  thm vcond_def
 end
-
-invariant sum_bal: sum_bal sum_bal for Bank
-  apply -
-  using constructor_bank apply blast
-  using deposit apply blast
-  using withdraw apply blast
-  done
 
 end
